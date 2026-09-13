@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "invaudit"
+version = "0.1.0"
+description = "Symmetry audit and invariance harness for black-box optimizers"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "torch>=2.0",
+  "numpy>=1.24",
+  "scipy>=1.10",
+  "pandas>=2.0",
+  "matplotlib>=3.7",
+]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Intended Audience :: Science/Research",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Topic :: Scientific/Engineering :: Mathematics",
+]
+
+[project.optional-dependencies]
+metabox = ["metaevobox==2.0.2"]
+test = ["pytest>=7"]
+
+[tool.setuptools.packages.find]
+include = ["invaudit*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
