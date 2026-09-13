@@ -12,6 +12,7 @@ ECDF of one run, in `[0, 1]`; multiply by 100 for points.
 | `exp2_audit.csv` | `exp2_metabox_audit.py --family audit` | one episode of a pretrained agent: `family, agent, fid, instance, probe, seed, A, best_final, real_fe, seconds, error, b0..b30` |
 | `exp2_ood.csv` | `exp2_metabox_audit.py --family ood` | same format, held-out functions, untransformed |
 | `exp3_audit.csv`, `exp3_ood.csv` | `exp3_anchors_on_bbob.py` | anchors on the MetaBox instances: `family, agent, fid, instance, probe, seed, A` |
+| `exp3_audit_15seeds.csv` | `exp3_anchors_on_bbob.py --seeds 15` | repetition of the anchor audit with fifteen seeds per cell |
 | `exp4_frame.csv` | `exp2_metabox_audit.py --family frame` | agents with the frame layer of the harness |
 | `exp5_dose.csv` | `exp2_metabox_audit.py --family dose` | agents under realistic domains |
 | `exp6_harness_anchors.csv` | `exp6_harness_anchors.py` | anchors with both harness layers, experiment-1 format |
@@ -34,6 +35,7 @@ Columns of the agent files:
 | `table_audit_scores.csv` | `make_figures.py` — the same for all 26 methods on the MetaBox training functions |
 | `table_law.csv` | `make_figures.py` — aggregate violation, mean ranks, rank gap `G`, mean performance |
 | `table_instances.csv` | `instance_report.py` — optimum radius, bias and admissibility of each MetaBox instance |
+| `table_anchor_power.csv` | `anchor_power_check.py` — anchor scores with fifteen seeds per cell |
 | `table_dose.csv` | `analyze_interventions.py` — realistic domains |
 | `table_frame_intervention.csv` | `analyze_interventions.py` — agents before / after the frame layer |
 | `table_harness_anchors.csv` | `analyze_interventions.py` — anchors without (`_b`) / with (`_a`) the harness |

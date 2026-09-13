@@ -155,6 +155,7 @@ Times are wall-clock on a 20-thread laptop CPU.
 | `experiments/exp2_metabox_audit.py --family frame --agents B2OPT,LES,SYMBOL,GLHF,RLHPSDE,RLDAS --workers 6 --out results/exp4_frame.csv` | Frame layer on the agents with search-space violations | MetaBox | ~1 h |
 | `experiments/exp2_metabox_audit.py --family dose --agents B2OPT,LES,SYMBOL,GLHF,RLHPSDE,RLDAS,LDE,GLEET --workers 14 --out results/exp5_dose.csv` | Realistic domains | MetaBox | ~1.5 h |
 | `experiments/exp3_anchors_on_bbob.py --family audit --out results/exp3_audit.csv` (and `--family ood`) | The anchors on the MetaBox instances | MetaBox | ~50 min |
+| `experiments/exp3_anchors_on_bbob.py --family audit --seeds 15 --workers 10 --out results/exp3_audit_15seeds.csv` | Anchor audit repeated with fifteen seeds (power check) | MetaBox | ~15 min |
 | `experiments/exp6_harness_anchors.py --workers 17` | Harness on the anchors, full validation grid | core | ~2 h |
 | `experiments/exp7_rank_ablation.py` | Ablation of the objective layer (raw / window quantile / worse-count / order embedding) | core | ~15 min |
 
@@ -163,6 +164,7 @@ Analysis, which reads only the stored results:
 ```bash
 python experiments/make_figures.py            # figures and violation / out-of-distribution tables
 python experiments/analyze_interventions.py   # realistic domains, frame layer, harness tables
+python experiments/anchor_power_check.py      # fifteen-seed power check of the anchor result
 python experiments/instance_report.py         # verified optima and biases of the MetaBox instances
 ```
 
