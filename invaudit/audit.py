@@ -95,9 +95,15 @@ def run_cell(cfg: AuditConfig, opt_name: str, fname: str, instance: int,
             view = harness(p, cfg.n_runs, seed=cfg.base_seed, **cfg.harness_layers)
             budget = cfg.budget - view.warmup_cost
         get_optimizer(opt_name).run(view, budget, seed=seed, n_runs=cfg.n_runs)
-        return ecdf_area(rec.finalize(), tg).cpu().numpy()
+        # order-embedding instrumentation: forced ties per cell,
+        # first tie per run, non-finite objective values seen by the layer
+        st = getattr(view, "_rank", None)
+        inst = dict(ties=int(getattr(st, "exhausted", 0)),
+                    nonfinite=int(getattr(st, "n_nonfinite", 0)),
+                    first_tie=list(getattr(st, "first_tie_eval", [None] * cfg.n_runs)))
+        return ecdf_area(rec.finalize(), tg).cpu().numpy(), inst
 
-    A_base = _score(p0)
+    A_base, I_base = _score(p0)
 
     rows = []
     for probe_name in probes:
@@ -107,7 +113,7 @@ def run_cell(cfg: AuditConfig, opt_name: str, fname: str, instance: int,
             # the identity probe returns the very same object; give it its own
             # view so that recorders are never shared
             p1 = p0.with_action(label="identity")
-        A_probe = _score(p1)
+        A_probe, I_probe = _score(p1)
         for r in range(cfg.n_runs):
             rows.append(dict(
                 optimizer=opt_name, function=fname, D=cfg.D, instance=instance,
@@ -117,6 +123,9 @@ def run_cell(cfg: AuditConfig, opt_name: str, fname: str, instance: int,
                 delta=float(A_base[r] - A_probe[r]),
                 bounded=cfg.bounded,
                 harnessed=bool(cfg.harness_layers),
+                ties_base=I_base["ties"], ties_probe=I_probe["ties"],
+                nonfinite_base=I_base["nonfinite"], nonfinite_probe=I_probe["nonfinite"],
+                first_tie_base=I_base["first_tie"][r], first_tie_probe=I_probe["first_tie"][r],
             ))
     return rows
 

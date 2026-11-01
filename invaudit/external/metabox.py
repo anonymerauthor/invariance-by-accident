@@ -175,12 +175,29 @@ class MetaBoxView:
     """Presents a (probed) invaudit problem through MetaBox's problem interface."""
 
     def __init__(self, problem: Problem, bias: float = 0.0, label: str = "",
-                 frame: Optional[float] = None):
+                 frame: Optional[float] = None, objective_layer: bool = False,
+                 max_fes: int = 20000, exposure: Optional[dict] = None):
         """``frame``: if given, the invariance harness's frame layer is active and
         the agent always sees the box ``[-frame, frame]^D`` - its training box -
         whatever box the problem is presented in.  On an untransformed problem
         whose box already is the training box the map is the identity, so the
-        layer changes nothing in distribution."""
+        layer changes nothing in distribution.
+
+        ``objective_layer``: the harness's objective layer.  The agent sees the
+        persistent order code of every value it evaluates instead of the value,
+        and the exposed optimum is a constant below every code the run can issue
+        (see :data:`OPT_CODE_OFFSET`), so ``eval(x) - optimum`` stays positive.
+        Performance is still recorded on the canonical objective.
+
+        ``exposure``: if a dict is given, every evaluation is counted in it
+        (instrumentation only; no effect on the run).  Keys: ``n`` evaluations,
+        ``out_ball`` points outside the ball of radius ``half_width`` in base
+        coordinates (the largest region on which a rotated presentation and the
+        original one coincide), ``out_box`` points outside the base box (where
+        the rotated presentation shows the function, or its boundary penalty, on
+        a region the original presentation never offers), and ``on_face`` points
+        on the faces of the presented box (clipped or boundary-repaired points).
+        Copies of the view share the dict."""
         from metaevobox.environment.problem.basic_problem import Basic_Problem
         self._Basic = Basic_Problem
         self.p = problem
@@ -200,6 +217,20 @@ class MetaBoxView:
         self.optimum = float(problem.g(y0)[0]) if problem.g is not None else self.bias
         self.label = label or f"{problem.spec.name}:{problem.label}"
         self.T1 = 0.0
+        self.objective_layer = objective_layer
+        self.max_fes = int(max_fes)
+        self._emb = None
+        self.exposure = exposure
+        if exposure is not None:
+            for k in ("n", "out_ball", "out_box", "on_face"):
+                exposure.setdefault(k, 0)
+        if objective_layer:
+            self.optimum = optimum_code(self.max_fes)
+            self._new_embedding()
+
+    def _new_embedding(self):
+        from ..harness import _OrderEmbeddingState
+        self._emb = _OrderEmbeddingState(1, "cpu", torch.float64)
 
     def __deepcopy__(self, memo):
         # Several optimisers (SYMBOL, and the MetaBox tester itself) deep-copy the
@@ -215,6 +246,8 @@ class MetaBoxView:
 
     def reset(self):
         self.T1 = 0.0
+        if self.objective_layer:
+            self._new_embedding()
 
     def eval(self, x):
         return self._Basic.eval(self, x)
@@ -227,26 +260,116 @@ class MetaBoxView:
             X = X.unsqueeze(0)
         if self.frame is not None:
             X = torch.from_numpy(self._c) + torch.from_numpy(self._w) * X
+        if self.exposure is not None:
+            self._count_exposure(X)
         y = self.p.base_value(X.unsqueeze(0))            # (1, n) canonical
         if self.p.recorder is not None:
             self.p.recorder.record(y)
         y = y + self.bias
         if self.p.g is not None:
             y = self.p.g(y)
+        if self.objective_layer:
+            y = self._emb.push_and_rank(y)           # (1, n) codes
         y = y[0]
         return y if is_torch else y.numpy()
+
+    def _count_exposure(self, X: torch.Tensor):
+        hw = float(self.p.half_width)
+        Xb = self.p.to_base(X)                       # base coordinates, box centred at 0
+        lb, ub = self.p.lb, self.p.ub                # presented box
+        tol = 1e-9 * float(torch.max(ub - lb))
+        e = self.exposure
+        e["n"] += int(X.shape[0])
+        e["out_ball"] += int((Xb.norm(dim=1) > hw * (1 + 1e-12)).sum())
+        e["out_box"] += int((Xb.abs().amax(dim=1) > hw * (1 + 1e-12)).sum())
+        e["on_face"] += int(((X <= lb + tol) | (X >= ub - tol)).any(dim=1).sum())
 
     def __str__(self):
         return self.label
 
 
+def optimum_code(max_fes: int) -> float:
+    """Exposed optimum under the objective layer.
+
+    The order embedding gives the first batch codes 0, 1, ... and every later
+    record-breaking value a code at most one below the current minimum, so no
+    run of at most ``4 * max_fes`` evaluations (SYMBOL, the largest spender,
+    performs about 1.9 * max_fes) issues a code below ``-4 * max_fes``.  The
+    optimum is placed one further below, which keeps ``eval(x) - optimum >= 1``
+    for agents that build costs from it."""
+    return -4.0 * float(max_fes) - 1.0
+
+
+class ObjectiveLayerProblem:
+    """Objective layer around a MetaBox training problem (for retraining, E7).
+
+    Delegates everything to the wrapped problem except ``func``/``eval``, which
+    return persistent order codes of the wrapped problem's values, and
+    ``optimum``, which is :func:`optimum_code`.  ``reset`` starts a new
+    embedding, so every episode is coded from scratch, exactly as at test time.
+
+    ``raw_best`` tracks the best raw value seen in the episode and ``last_raw``
+    the raw values of the last evaluation (both minus the raw optimum when known).  It is never shown to the optimizer; it exists only so
+    that a training reward can be computed from raw values (E7, condition
+    ``layer_rawreward``).
+    """
+
+    def __init__(self, inner, max_fes: int = 20000):
+        from metaevobox.environment.problem.basic_problem import Basic_Problem
+        self._Basic = Basic_Problem
+        self.inner = inner
+        self.max_fes = int(max_fes)
+        self.optimum = optimum_code(self.max_fes)
+        self.T1 = 0.0
+        self._emb = None
+        self.reset()
+
+    def __getattr__(self, name):          # dim, lb, ub, ... of the wrapped problem
+        inner = self.__dict__.get("inner")
+        if inner is None or (name.startswith("__") and name.endswith("__")):
+            raise AttributeError(name)
+        return getattr(inner, name)
+
+    def reset(self):
+        from ..harness import _OrderEmbeddingState
+        self.T1 = 0.0
+        if hasattr(self.inner, "reset"):
+            self.inner.reset()
+        self._emb = _OrderEmbeddingState(1, "cpu", torch.float64)
+        self.raw_best = float("inf")
+        self.last_raw = None
+
+    def func(self, x):
+        y = np.asarray(self.inner.func(x), dtype=np.float64).reshape(-1)
+        opt = getattr(self.inner, "optimum", None)
+        raw = y - (float(opt) if opt is not None else 0.0)
+        self.last_raw = raw
+        self.raw_best = min(self.raw_best, float(np.min(raw)))
+        c = self._emb.push_and_rank(torch.from_numpy(y.copy())[None, :])[0]
+        return c.numpy()
+
+    def eval(self, x):
+        return self._Basic.eval(self, x)
+
+    def __str__(self):
+        return f"objlayer({self.inner})"
+
+
 def run_agent(name: str, problem: Problem, bias: float, seed: int,
-              maxFEs: int = 20000, device: str = "cpu", frame: Optional[float] = None):
-    """One test episode of a pretrained agent on a probed problem."""
+              maxFEs: int = 20000, device: str = "cpu", frame: Optional[float] = None,
+              objective_layer: bool = False, agent_path: Optional[str] = None,
+              exposure: Optional[dict] = None):
+    """One test episode of a pretrained (or retrained: ``agent_path``) agent.
+    ``exposure``: optional dict filled with evaluation counts (see MetaBoxView)."""
     from metaevobox.environment.basic_environment import PBO_Env
     agent, opt_cls = load_agent(name)
+    if agent_path is not None:
+        with open(agent_path, "rb") as f:
+            agent = pickle.load(f)
+        agent.config.full_meta_data = False
     cfg = make_config(maxFEs=maxFEs, dim=problem.D, device=device)
-    view = MetaBoxView(problem, bias=bias, frame=frame)
+    view = MetaBoxView(problem, bias=bias, frame=frame, objective_layer=objective_layer,
+                       max_fes=maxFEs, exposure=exposure)
     env = PBO_Env(view, opt_cls(cfg))
     torch.manual_seed(seed)
     np.random.seed(seed)

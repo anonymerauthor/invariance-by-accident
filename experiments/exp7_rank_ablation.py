@@ -1,8 +1,8 @@
 """Experiment 7 - ablation of the harness's objective layer.
 
 Compares four ways of presenting objective values to the optimizer - raw values,
-a quantile against a sliding window, the worse-count transform
-and the persistent order embedding - on in-distribution
+a quantile against a sliding window, the worse-count transform (Proposition 2)
+and the persistent order embedding (Proposition 3) - on in-distribution
 performance, with the frame layer active in all harnessed variants.  This is the
 design ablation that selected the order embedding; it uses stable seeds so that
 it can be reproduced exactly.

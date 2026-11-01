@@ -1,0 +1,35 @@
+  best = torch.from_numpy(d[cols].to_numpy(dtype=float))
+checkpoint used per budget: {2000: 1984, 5000: 3839, 20000: 20000}
+significant pairs per budget: {2000: 21, 5000: 23, 20000: 25}
+
+== pairs significant at any budget: V (points), * = q <= .05
+budget                            2000   5000   20000
+agent   probe                                        
+B2OPT   ambient_translation_diag  2.33*  2.95*  4.42*
+        coordinate_permutation    0.31*  0.38*  0.47*
+        domain_scaling_down       2.08*   2.6*  3.77*
+        domain_scaling_up         0.29*   0.4*  0.47*
+        rotation                    0.2  0.29*  0.35*
+DEDDQN  monotone_log               0.8*  1.25*  3.73*
+        monotone_spline           0.79*  1.24*  3.73*
+GLHF    ambient_translation_diag  1.93*  2.14*  2.54*
+LDE     coordinate_permutation     0.27   0.3*   0.38
+LES     ambient_translation_diag  4.47*   4.7*  5.14*
+        domain_scaling_up         0.43*  0.42*  0.39*
+RLDAS   ambient_translation_diag  0.53*  0.79*  3.03*
+        domain_scaling_down       0.22*  0.21*  0.15*
+        domain_scaling_up          0.08   0.13  1.48*
+        monotone_log                0.0    0.0  0.55*
+        monotone_spline             0.0    0.0  0.85*
+RLHPSDE domain_scaling_down       4.68*  4.76*  5.37*
+        domain_scaling_up         0.17*  0.22*  0.81*
+RLPSO   ambient_translation_diag  0.41*  0.47*   0.6*
+        domain_scaling_up         0.57*  0.67*  0.86*
+RNNOPT  coordinate_permutation    1.36*  1.37*  1.38*
+        fitness_rescale           0.02*  0.02*  0.02*
+        monotone_log              1.09*   1.1*  1.11*
+        monotone_spline           1.09*   1.1*  1.11*
+        rotation                  0.87*  0.88*  0.91*
+SYMBOL  ambient_translation_diag  5.03*  4.68*  3.87*
+budget 2000: 21/25 of the full-budget violations detected; 0 only at 2000
+budget 5000: 22/25 of the full-budget violations detected; 1 only at 5000

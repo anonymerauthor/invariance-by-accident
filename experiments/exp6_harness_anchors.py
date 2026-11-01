@@ -7,8 +7,7 @@ quantities are read off it:
 * the violation left under the probes the harness targets, which must vanish;
 * the in-distribution cost, obtained by comparing the untransformed runs with
   those of experiment 1 under the same seeds - zero is predicted for every
-  comparison-based optimiser, because the order embedding preserves every
-  comparison the optimiser can make.
+  comparison-based optimiser (Corollary 1 of the paper).
 """
 
 from __future__ import annotations
@@ -49,8 +48,11 @@ if __name__ == "__main__":
 
     ap = argparse.ArgumentParser()
     ap.add_argument("--workers", type=int, default=16)
+    ap.add_argument("--out", default="results/exp6_harness_anchors.csv")
+    ap.add_argument("--limit", type=int, default=0, help="run only the first N cells")
     args = ap.parse_args()
-    out = "results/exp6_harness_anchors.csv"
+    out = args.out
+    os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
     cells = list(itertools.product(optimizer_names(), list(FUNCTIONS), range(3)))
     done = set()
     if os.path.exists(out):
@@ -59,6 +61,8 @@ if __name__ == "__main__":
                 prev[["optimizer", "function", "instance"]].drop_duplicates()
                 .itertuples(index=False)}
     todo = [c for c in cells if c not in done]
+    if args.limit:
+        todo = todo[::max(1, len(todo) // args.limit)][:args.limit]
     print(f"{len(cells)} cells, {len(done)} done, {len(todo)} to run", flush=True)
     t0 = time.time()
     new = not os.path.exists(out)

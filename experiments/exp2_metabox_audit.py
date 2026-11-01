@@ -10,6 +10,18 @@ Two task families share one runner:
 ``ood``    every agent, untransformed, on the functions held out from its
            training.  Used later for the out-of-distribution side of the law; it
            is never mixed with the probes, which keeps the law non-circular.
+``rot``    (revision, E12) identity and rotation on the training functions, with
+           the boundary exposure of every run recorded (see below).
+``ood_probes`` (revision, E8) every probe on the held-out functions.  Held-out
+           instances whose optimum lies outside the probe-safe ball (F20, F24 for
+           some instances) are excluded, as in the audit.
+
+Families ending in ``_layer`` run with the objective layer on.  The revision
+families also record *exposure*: the fraction of evaluations outside the ball
+of radius 5 (``x_out_ball``), outside the base box (``x_out_box``) and on the
+presented box faces (``x_on_face``).  Inside the ball a rotated presentation
+coincides with the original one, so a run that never leaves it cannot owe a
+rotation violation to the box.
 
 Every task is one independent episode, executed in a process pool with one
 thread per worker.  Results are appended to a CSV as they complete and the
@@ -57,6 +69,8 @@ AUDIT_PROBES = ["identity", "ambient_translation_diag", "rotation",
 N_CHECKPOINTS = 31
 BUDGET = 20000
 KEY = ("family", "agent", "fid", "instance", "probe", "seed")
+EXPOSURE_FAMILIES = ("rot", "ood_probes")          # base families that record exposure
+EXPOSURE_FIELDS = ["n_eval", "x_out_ball", "x_out_box", "x_on_face"]
 
 
 def _task_key(t):
@@ -65,16 +79,23 @@ def _task_key(t):
 
 def build_tasks(family, agents, n_instances, n_seeds):
     tasks = []
-    if family == "audit":
+    base = family[:-len("_layer")] if family.endswith("_layer") else family
+    if base == "audit":
         grid = itertools.product(agents, TRAIN_FIDS, range(n_instances), AUDIT_PROBES,
                                  range(n_seeds))
-    elif family == "frame":
+    elif base == "frame":
         grid = itertools.product(agents, TRAIN_FIDS, range(n_instances), FRAME_PROBES,
                                  range(n_seeds))
-    elif family == "dose":
+    elif base == "dose":
         grid = itertools.product(agents, TRAIN_FIDS, range(n_instances), DOSE_PROBES,
                                  range(n_seeds))
-    elif family == "ood":
+    elif base == "rot":
+        grid = itertools.product(agents, TRAIN_FIDS, range(n_instances),
+                                 ["identity", "rotation"], range(n_seeds))
+    elif base == "ood_probes":
+        grid = itertools.product(agents, TEST_FIDS, range(n_instances), AUDIT_PROBES,
+                                 range(n_seeds))
+    elif base == "ood":
         grid = itertools.product(agents, TEST_FIDS, range(n_instances), ["identity"],
                                  range(n_seeds))
     else:
@@ -97,9 +118,11 @@ def run_task(t):
 
     t0 = time.time()
     try:
-        cps = default_checkpoints(BUDGET, N_CHECKPOINTS)
-        p0, bias = bbob_instance(t["fid"], t["instance"],
-                                 require_ball=(t["family"] != "ood"))
+        dim, budget = int(t.get("dim", 10)), int(t.get("budget", BUDGET))
+        cps = default_checkpoints(budget, N_CHECKPOINTS)
+        base = t["family"][:-len("_layer")] if t["family"].endswith("_layer") else t["family"]
+        p0, bias = bbob_instance(t["fid"], t["instance"], dim=dim,
+                                 require_ball=(base != "ood"))
         probe = get_probe(t["probe"])
         p = probe.apply(p0, 777 + 31 * t["instance"])
         if p is p0:
@@ -107,14 +130,20 @@ def run_task(t):
         rec = Recorder(cps, 1, "cpu", torch.float64)
         p.attach_recorder(rec)
         seed = 1000 + 97 * t["seed"] + 13 * t["instance"] + t["fid"]
-        run_agent(t["agent"], p, bias, seed=seed, maxFEs=BUDGET,
-                  frame=5.0 if t["family"] == "frame" else None)
+        expo = {} if base in EXPOSURE_FAMILIES else None
+        run_agent(t["agent"], p, bias, seed=seed, maxFEs=budget,
+                  frame=5.0 if t["family"] == "frame" else None,
+                  objective_layer=t["family"].endswith("_layer"), exposure=expo)
         best = rec.finalize()
         A = float(ecdf_area(best, default_targets())[0])
         row = dict(t, A=A, best_final=float(best[0, -1]), real_fe=int(rec.fe),
                    seconds=round(time.time() - t0, 2), error="")
         for j in range(best.shape[1]):
             row[f"b{j}"] = float(best[0, j])
+        if expo is not None:
+            n = max(expo["n"], 1)
+            row.update(n_eval=expo["n"], x_out_ball=expo["out_ball"] / n,
+                       x_out_box=expo["out_box"] / n, x_on_face=expo["on_face"] / n)
         return row
     except Exception as e:  # keep the pool alive; the failure is recorded
         return dict(t, A=float("nan"), best_final=float("nan"), real_fe=-1,
@@ -125,18 +154,30 @@ def run_task(t):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--family", choices=["audit", "ood", "frame", "dose"], required=True)
+    ap.add_argument("--family", choices=["audit", "ood", "frame", "dose", "audit_layer", "ood_layer",
+                                         "rot", "ood_probes", "ood_probes_layer"], required=True)
     ap.add_argument("--agents", default="all")
     ap.add_argument("--instances", type=int, default=2)
     ap.add_argument("--seeds", type=int, default=5)
     ap.add_argument("--workers", type=int, default=12)
     ap.add_argument("--out", required=True)
     ap.add_argument("--limit", type=int, default=0, help="run only the first N tasks")
+    ap.add_argument("--dim", type=int, default=10,
+                    help="(revision, E3) zero-shot at another dimension with the pretrained "
+                         "10-D models; write to a separate --out")
+    ap.add_argument("--budget", type=int, default=BUDGET)
+    ap.add_argument("--probes", default="all",
+                    help="comma list to keep (identity is always kept), e.g. for E3")
     args = ap.parse_args()
 
     from invaudit.external.metabox import METABOX_AGENTS
     agents = METABOX_AGENTS if args.agents == "all" else args.agents.split(",")
     tasks = build_tasks(args.family, agents, args.instances, args.seeds)
+    for t in tasks:
+        t.update(dim=args.dim, budget=args.budget)
+    if args.probes != "all":
+        keep = set(args.probes.split(",")) | {"identity"}
+        tasks = [t for t in tasks if t["probe"] in keep]
 
     done = set()
     if os.path.exists(args.out):
@@ -155,8 +196,10 @@ def main():
     if not todo:
         return
 
-    fields = list(KEY) + ["A", "best_final", "real_fe", "seconds", "error"] + \
+    fields = list(KEY) + ["dim", "budget", "A", "best_final", "real_fe", "seconds", "error"] + \
         [f"b{j}" for j in range(N_CHECKPOINTS)]
+    if args.family.replace("_layer", "") in EXPOSURE_FAMILIES:
+        fields += EXPOSURE_FIELDS
     os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
     new_file = not os.path.exists(args.out)
     import multiprocessing as mp

@@ -188,9 +188,34 @@ class _OrderEmbeddingState:
         self.dtype = dtype
         self.V = [torch.empty(0, device=device, dtype=dtype) for _ in range(R)]
         self.C = [torch.empty(0, device=device, dtype=dtype) for _ in range(R)]
+        # Instrumentation: ties forced by finite precision, the
+        # evaluation index of the first one per run, and non-finite inputs.
         self.exhausted = 0
+        self.n_seen = [0] * R
+        self.first_tie_eval = [None] * R
+        self.n_nonfinite = 0
 
     def _codes_for_run(self, r: int, yr: torch.Tensor) -> torch.Tensor:
+        # NaN has no order.  It is coded as +inf, i.e. worse than every finite
+        # value and equal to every other NaN or +inf, which is also where
+        # torch's sort places it, so comparison-based optimizers see the same
+        # decisions with and without the layer.
+        nonfinite = ~torch.isfinite(yr)
+        if bool(nonfinite.any()):
+            self.n_nonfinite += int(nonfinite.sum())
+            yr = torch.where(torch.isnan(yr), torch.full_like(yr, float("inf")), yr)
+        n_batch = yr.numel()
+        out = self._codes_for_run_finite(r, yr)
+        self.n_seen[r] += n_batch
+        return out
+
+    def _count_ties(self, r: int, n: int):
+        if n:
+            self.exhausted += n
+            if self.first_tie_eval[r] is None:
+                self.first_tie_eval[r] = self.n_seen[r]
+
+    def _codes_for_run_finite(self, r: int, yr: torch.Tensor) -> torch.Tensor:
         V, C = self.V[r], self.C[r]
         uniq, inv = torch.unique(yr, sorted=True, return_inverse=True)
         if V.numel() == 0:
@@ -227,7 +252,14 @@ class _OrderEmbeddingState:
             code = torch.where(has_lo & has_hi, inside,
                                torch.where(has_hi, below, above))
             both = has_lo & has_hi
-            self.exhausted += int((both & ((code <= lo) | (code >= hi))).sum())
+            # A tie is a new code that is not strictly inside its gap, or that
+            # collides with the previous new code of the same gap.  (The
+            # original counter missed the second kind.)  Codes are left as
+            # computed, so outputs are unchanged; they are non-decreasing within
+            # a gap, so a tie never becomes an inversion.
+            prev = torch.where(j > 0, torch.roll(code, 1), lo)
+            tie = (both & ((code <= lo) | (code >= hi))) | ((j > 0) & (code <= prev))
+            self._count_ties(r, int(tie.sum()))
             codes_u[new] = code
 
             V2 = torch.cat([V, uniq[new]])
@@ -243,12 +275,198 @@ class _OrderEmbeddingState:
         return out
 
 
+class _OrderEmbeddingV2State:
+    """Persistent order embedding with recency-aware placement.
+
+    Same contract as :class:`_OrderEmbeddingState`: every distinct value gets a
+    code at first appearance, codes never change, and code order equals value
+    order for every pair of values ever issued.  Only *where inside a gap* a new
+    code is placed differs.  Placement depends on values only through their
+    order and on arrival times, so monotone invariance is unaffected.
+
+    Why placement matters.  Codes are float64, so a gap can be split only until
+    its relative width falls below about ``2**-52``.  Splitting a gap evenly
+    spends ``log2(m + 1)`` bits per batch of ``m`` new values.  Converging runs
+    insert values in sorted order - every generation lands next to the values of
+    the previous one - which degenerates the implicit insertion tree into a
+    chain and exhausts float64 within a few dozen generations (observed for
+    CMA-ES on Schaffer F7 with the legacy embedding).
+
+    Placement rules (``placement``).
+    ``"recent"`` (default)  ``m`` new values falling into a gap ``(lo, hi)`` are
+        spaced evenly in the fraction ``eps`` of the gap next to the neighbour
+        that was coded *more recently*; if both neighbours were coded in the same
+        batch the gap is split evenly.  A run converging from either side keeps
+        drawing values towards the newer neighbour, so the region next to the
+        older neighbour - where the run is heading - stays free: a sorted
+        sequence costs ``-log2(1 - eps)`` bits per batch instead of
+        ``log2(m + 1)``.
+    ``"trend"``  as ``"recent"``, but only when the newer neighbour was coded in
+        the immediately preceding batch and the other one earlier; otherwise
+        an even split.
+    ``"worse"``  always next to the worse neighbour (one-sided variant).
+    ``"even"``   even split (the legacy rule, without the 2**30 lattice).
+    Values better than everything seen are placed in the gap ``(0, c_min)``,
+    whose virtual lower end counts as old, so new best values approach zero
+    geometrically and keep full relative precision.  Values worse than
+    everything seen extend the range linearly.
+
+    Finite precision.  No online scheme with immutable codes drawn from a finite
+    set avoids ties on every sequence.  When a new code would not lie strictly
+    between its neighbours it is set equal to its lower neighbour - a tie, after
+    which those two values compare equal - and the event is counted.  The state
+    records the number of ties, the evaluation index of the first tie per run,
+    and the deepest relative gap used among distinct codes, in bits.
+    """
+
+    def __init__(self, R: int, device, dtype, eps: float = 1.0 / 16.0,
+                 placement: str = "recent"):
+        if placement not in ("recent", "trend", "worse", "even"):
+            raise ValueError(placement)
+        self.R = R
+        self.device = device
+        self.dtype = dtype
+        self.eps = float(eps)
+        self.placement = placement
+        self.V = [torch.empty(0, device=device, dtype=dtype) for _ in range(R)]
+        self.C = [torch.empty(0, device=device, dtype=dtype) for _ in range(R)]
+        self.T = [torch.empty(0, device=device, dtype=torch.long) for _ in range(R)]
+        self.batch = [0] * R
+        self.exhausted = 0
+        self.n_seen = [0] * R
+        self.first_tie_eval = [None] * R
+        self.min_rel_gap = float("inf")
+
+    @property
+    def max_depth_bits(self) -> float:
+        import math
+        if self.min_rel_gap == float("inf"):
+            return 0.0
+        return -math.log2(self.min_rel_gap)
+
+    def _track(self, r: int, n_ties: int, n_batch: int):
+        C = self.C[r]
+        if C.numel() > 1:
+            d = C[1:] - C[:-1]
+            pos = d > 0
+            if bool(pos.any()):
+                g = d[pos] / C[1:][pos].abs().clamp_min(torch.finfo(C.dtype).tiny)
+                self.min_rel_gap = min(self.min_rel_gap, float(g.min()))
+        if n_ties:
+            self.exhausted += n_ties
+            if self.first_tie_eval[r] is None:
+                self.first_tie_eval[r] = self.n_seen[r] + n_batch
+
+    def _codes_for_run(self, r: int, yr: torch.Tensor) -> torch.Tensor:
+        V, C, T = self.V[r], self.C[r], self.T[r]
+        b = self.batch[r]
+        self.batch[r] += 1
+        uniq, inv = torch.unique(yr, sorted=True, return_inverse=True)
+        if V.numel() == 0:
+            codes_u = torch.arange(1, uniq.numel() + 1, device=self.device,
+                                   dtype=self.dtype)
+            self.V[r], self.C[r] = uniq, codes_u
+            self.T[r] = torch.full((uniq.numel(),), b, dtype=torch.long)
+            self._track(r, 0, yr.numel())
+            self.n_seen[r] += yr.numel()
+            return codes_u[inv]
+
+        n_old = V.numel()
+        pos = torch.searchsorted(V, uniq)
+        hit = (pos < n_old) & (V[pos.clamp(max=n_old - 1)] == uniq)
+        codes_u = torch.empty_like(uniq)
+        codes_u[hit] = C[pos[hit]]
+        n_ties = 0
+
+        new = ~hit
+        if bool(new.any()):
+            pn = pos[new]
+            _, counts = torch.unique_consecutive(pn, return_counts=True)
+            starts = torch.cumsum(counts, 0) - counts
+            m = torch.repeat_interleave(counts, counts).to(self.dtype)
+            j = (torch.arange(pn.numel(), device=self.device)
+                 - torch.repeat_interleave(starts, counts)).to(self.dtype)
+
+            has_lo = pn > 0
+            has_hi = pn < n_old
+            lo = torch.where(has_lo, C[(pn - 1).clamp(min=0)], torch.zeros_like(m))
+            hi = torch.where(has_hi, C[pn.clamp(max=n_old - 1)], torch.zeros_like(m))
+            # creation batch of each neighbour; the virtual lower end 0 is oldest
+            t_lo = torch.where(has_lo, T[(pn - 1).clamp(min=0)], torch.full_like(pn, -1))
+            t_hi = torch.where(has_hi, T[pn.clamp(max=n_old - 1)], torch.full_like(pn, -1))
+
+            w = hi - lo
+            near_hi = hi - self.eps * w * (m - j) / m
+            near_lo = lo + self.eps * w * (j + 1.0) / m
+            even = lo + w * (j + 1.0) / (m + 1.0)
+            if self.placement == "worse":
+                inside = near_hi
+            elif self.placement == "even":
+                inside = even
+            elif self.placement == "trend":
+                # only a neighbour coded in the immediately preceding batch, with
+                # an older one on the other side, is taken as evidence of a trend
+                hi_new = (t_hi == b - 1) & (t_lo < b - 1)
+                lo_new = (t_lo == b - 1) & (t_hi < b - 1)
+                inside = torch.where(hi_new, near_hi, torch.where(lo_new, near_lo, even))
+            else:
+                inside = torch.where(t_hi > t_lo, near_hi,
+                                     torch.where(t_lo > t_hi, near_lo, even))
+            above = lo + (j + 1.0)                                 # new worst values
+            code = torch.where(has_hi, inside, above)
+
+            # strict order within each gap: lo < c_0 < ... < c_{m-1} < hi
+            prev = torch.where(j > 0, torch.roll(code, 1), lo)
+            bad = has_hi & ((code <= prev) | (code >= hi))
+            if bool(bad.any()):
+                # A tie: the code collapses onto its lower neighbour (the previous
+                # new code in the gap, or lo for the first).  Fixed in sorted order
+                # so that a collapsed code is what its successor is compared with.
+                for i in torch.nonzero(bad).flatten().tolist():
+                    left = lo[i] if j[i] == 0 else code[i - 1]
+                    if not (left < code[i] < hi[i]):
+                        code[i] = left
+                        n_ties += 1
+            codes_u[new] = code
+
+            V2 = torch.cat([V, uniq[new]])
+            C2 = torch.cat([C, code])
+            T2 = torch.cat([T, torch.full((code.numel(),), b, dtype=torch.long)])
+            order = torch.argsort(V2)
+            self.V[r], self.C[r], self.T[r] = V2[order], C2[order], T2[order]
+        self._track(r, n_ties, yr.numel())
+        self.n_seen[r] += yr.numel()
+        return codes_u[inv]
+
+    def push_and_rank(self, y: torch.Tensor) -> torch.Tensor:
+        out = torch.empty_like(y)
+        for r in range(y.shape[0]):
+            out[r] = self._codes_for_run(r, y[r])
+        return out
+
+
+def count_code_ties(state, r: int = 0) -> int:
+    """Distinct values that share a code, counted from the stored codes.
+
+    Works for every embedding, including the legacy one, whose own counter misses
+    collisions between new codes placed in the same gap."""
+    C = state.C[r]
+    return int((C[1:] == C[:-1]).sum()) if C.numel() > 1 else 0
+
+
+def count_code_inversions(state, r: int = 0) -> int:
+    """Neighbouring distinct values whose codes are out of order (must be 0)."""
+    C = state.C[r]
+    return int((C[1:] < C[:-1]).sum()) if C.numel() > 1 else 0
+
+
 class HarnessedProblem:
     """A canonicalised view of a problem.  Duck-types :class:`Problem`."""
 
     def __init__(self, inner: Problem, box_frame=True, rank_fitness=True,
                  pca_frame=False, pca_warmup_per_dim=20, n_runs=1,
-                 rank_mode="order", rank_window_mult=20, seed=0):
+                 rank_mode="order", rank_window_mult=20, seed=0,
+                 order_eps=1.0 / 16.0, order_placement="recent"):
         self.inner = inner
         self.box_frame = box_frame
         self.rank_fitness = rank_fitness
@@ -262,6 +480,10 @@ class HarnessedProblem:
         if rank_fitness:
             if rank_mode == "order":
                 self._rank = _OrderEmbeddingState(n_runs, inner.device, inner.dtype)
+            elif rank_mode == "order2":
+                self._rank = _OrderEmbeddingV2State(n_runs, inner.device, inner.dtype,
+                                                    eps=order_eps,
+                                                    placement=order_placement)
             elif rank_mode == "worse_count":
                 self._rank = _WorseCountState(n_runs, inner.device, inner.dtype)
             elif rank_mode == "window":
@@ -397,7 +619,9 @@ class HarnessedProblem:
 
 def harness(problem: Problem, n_runs: int, *, box_frame=True, rank_fitness=True,
             pca_frame=False, rank_mode="order", rank_window_mult=20,
-            seed=0) -> HarnessedProblem:
+            seed=0, order_eps=1.0 / 16.0,
+            order_placement="recent") -> HarnessedProblem:
     return HarnessedProblem(problem, box_frame=box_frame, rank_fitness=rank_fitness,
                             pca_frame=pca_frame, n_runs=n_runs, rank_mode=rank_mode,
-                            rank_window_mult=rank_window_mult, seed=seed)
+                            rank_window_mult=rank_window_mult, seed=seed,
+                            order_eps=order_eps, order_placement=order_placement)

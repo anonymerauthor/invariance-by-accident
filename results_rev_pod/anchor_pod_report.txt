@@ -1,0 +1,118 @@
+
+== exp1 10-D (pod): 100 tests, 10 significant; false alarms 2/90; known non-invariances detected 8/10
+  false alarms:
+ agent         probe      V      p      q
+CMA-ES fitness_shift 0.7305 0.0002 0.0031
+ SHADE monotone_pow3 0.2724 0.0002 0.0031
+  known non-invariances (V in points):
+        agent                  probe     V     q  significant
+DE/rand/1/exp coordinate_permutation 0.225 0.020         True
+       LSHADE        monotone_spline 0.000 1.000        False
+        SHADE        monotone_spline 0.184 0.006         True
+DE/best/1/bin               rotation 0.835 0.473        False
+DE/rand/1/bin               rotation 4.308 0.003         True
+DE/rand/1/exp               rotation 4.214 0.003         True
+       LSHADE               rotation 3.445 0.003         True
+          PSO               rotation 6.634 0.003         True
+        SHADE               rotation 2.327 0.003         True
+          jDE               rotation 5.606 0.003         True
+
+exp1 original vs pod: verdict agreement 100/100, Spearman(V) = 0.856
+
+== exp6 10-D with harness (pod): 70 tests, 1 significant; false alarms 1/68; known non-invariances detected 0/2
+  false alarms:
+ agent               probe      V      p     q
+CMA-ES ambient_translation 0.1621 0.0005 0.035
+  known non-invariances (V in points):
+ agent           probe   V   q  significant
+LSHADE monotone_spline 0.0 1.0        False
+ SHADE monotone_spline 0.0 1.0        False
+
+harness on the anchors, probes of experiment 6: significant without / with: 2 / 1
+
+== in-distribution cost of the harness (untransformed runs, same seeds) and order-embedding ties
+      optimizer   n  A_off   A_on  delta_pts  max_abs_pts      p  runs_with_ties  median_first_tie  nonfinite
+  random_search 630 0.0949 0.0949     0.0000       0.0000 1.0000          0.0000               NaN          0
+  DE/rand/1/bin 630 0.1883 0.1883     0.0003       0.1307 0.3070          0.0000               NaN          0
+  DE/rand/1/exp 630 0.1886 0.1886     0.0006       0.1307 0.2101          0.0000               NaN          0
+DE/rand/1/arith 630 0.1007 0.1007     0.0000       0.0000 1.0000          0.0238               NaN          0
+  DE/best/1/bin 630 0.1565 0.1565     0.0000       0.0000 1.0000          0.0714               NaN          0
+            jDE 630 0.1981 0.1981     0.0004       0.0654 0.0836          0.0000               NaN          0
+          SHADE 630 0.2305 0.2328     0.2310      14.2484 0.0000          0.1429               NaN          0
+         LSHADE 630 0.2415 0.2430     0.1477      15.3595 0.0000          0.1429               NaN          0
+            PSO 630 0.2182 0.2182     0.0000       0.0000 1.0000          0.0000               NaN          0
+         CMA-ES 630 0.2540 0.2541     0.0029      16.4706 0.0299          0.2619               NaN          0
+
+fraction of probed runs with ties / non-finite values, per probe:
+                     ties_probe  nonfinite_probe
+probe                                           
+ambient_translation       0.045              0.0
+domain_scaling_down       0.060              0.0
+domain_scaling_up         0.062              0.0
+fitness_rescale           0.064              0.0
+monotone_log              0.064              0.0
+monotone_pow3             0.064              0.0
+monotone_spline           0.064              0.0
+
+fraction of probed runs with ties, per function (top 6):
+function
+hgbat               0.386
+different_powers    0.210
+schaffer_f7         0.100
+sharp_ridge         0.057
+ackley              0.033
+discus              0.033
+
+== E3 anchors 30-D: 60 tests, 8 significant; false alarms 0/52; known non-invariances detected 8/8
+  known non-invariances (V in points):
+        agent                  probe     V     q  significant
+DE/rand/1/exp coordinate_permutation 0.715 0.002         True
+DE/best/1/bin               rotation 0.283 0.013         True
+DE/rand/1/bin               rotation 5.192 0.002         True
+DE/rand/1/exp               rotation 5.407 0.002         True
+       LSHADE               rotation 7.940 0.002         True
+          PSO               rotation 6.682 0.002         True
+        SHADE               rotation 7.594 0.002         True
+          jDE               rotation 6.619 0.002         True
+
+== E3 anchors 50-D: 60 tests, 8 significant; false alarms 0/52; known non-invariances detected 8/8
+  known non-invariances (V in points):
+        agent                  probe     V     q  significant
+DE/rand/1/exp coordinate_permutation 0.624 0.002         True
+DE/best/1/bin               rotation 0.251 0.002         True
+DE/rand/1/bin               rotation 5.220 0.002         True
+DE/rand/1/exp               rotation 5.911 0.002         True
+       LSHADE               rotation 7.223 0.002         True
+          PSO               rotation 5.683 0.002         True
+        SHADE               rotation 7.173 0.002         True
+          jDE               rotation 7.256 0.002         True
+
+== E3 anchors 100-D: 60 tests, 7 significant; false alarms 0/52; known non-invariances detected 7/8
+  known non-invariances (V in points):
+        agent                  probe     V     q  significant
+DE/rand/1/exp coordinate_permutation 0.580 0.002         True
+DE/best/1/bin               rotation 0.173 1.000        False
+DE/rand/1/bin               rotation 4.289 0.002         True
+DE/rand/1/exp               rotation 6.104 0.002         True
+       LSHADE               rotation 6.077 0.002         True
+          PSO               rotation 3.463 0.002         True
+        SHADE               rotation 5.956 0.002         True
+          jDE               rotation 7.565 0.002         True
+
+== E1b anchors, MetaBox instances: 80 tests, 2 significant; false alarms 2/70; known non-invariances detected 0/10
+  false alarms:
+        agent                  probe      V      p    q
+DE/best/1/bin coordinate_permutation 1.7571 0.0005 0.02
+        SHADE        fitness_rescale 0.1492 0.0005 0.02
+  known non-invariances (V in points):
+        agent                  probe     V     q  significant
+DE/rand/1/exp coordinate_permutation 0.000 1.000        False
+       LSHADE        monotone_spline 0.000 1.000        False
+        SHADE        monotone_spline 0.204 0.392        False
+DE/best/1/bin               rotation 0.000 1.000        False
+DE/rand/1/bin               rotation 0.186 0.652        False
+DE/rand/1/exp               rotation 0.096 1.000        False
+       LSHADE               rotation 0.454 0.589        False
+          PSO               rotation 0.077 1.000        False
+        SHADE               rotation 0.213 0.447        False
+          jDE               rotation 0.201 0.392        False

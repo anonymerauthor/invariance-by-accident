@@ -1,0 +1,158 @@
+audit       : 40320 rows, 120 crashed, 16 agents
+audit_layer : 40320 rows, 0 crashed, 16 agents
+ood         : 10240 rows, 0 crashed, 16 agents
+ood_layer   : 10240 rows, 0 crashed, 16 agents
+
+== V (points) and BH q without / with the layer
+                                      V                  q            
+cond                              audit audit_layer  audit audit_layer
+agent   probe                                                         
+B2OPT   ambient_translation_diag  4.425       4.431  0.001       0.002
+        coordinate_permutation    0.471       0.534  0.001       0.002
+        domain_scaling_down       3.767       3.748  0.001       0.002
+        domain_scaling_up         0.470       0.573  0.001       0.002
+        fitness_rescale           0.000       0.000  1.000       1.000
+        monotone_log              0.079       0.000  0.369       1.000
+        monotone_spline           0.067       0.000  0.409       1.000
+        rotation                  0.352       0.407  0.003       0.002
+DEDDQN  ambient_translation_diag  0.000       0.000  1.000       1.000
+        coordinate_permutation    0.265       0.196  0.780       1.000
+        domain_scaling_down       0.000       0.000  1.000       1.000
+        domain_scaling_up         0.000       0.000  1.000       1.000
+        fitness_rescale           0.605       0.000  0.137       1.000
+        monotone_log              3.733       0.000  0.001       1.000
+        monotone_spline           3.730       0.000  0.001       1.000
+        rotation                  0.885       0.612  0.062       0.208
+DEDQN   ambient_translation_diag  0.000       0.000  1.000       1.000
+        coordinate_permutation    0.000       0.000  1.000       1.000
+        domain_scaling_down       0.000       0.009  1.000       0.170
+        domain_scaling_up         0.000       0.000  1.000       1.000
+        fitness_rescale           0.000       0.000  1.000       1.000
+        monotone_log              0.000       0.000  1.000       1.000
+        monotone_spline           0.014       0.000  0.668       1.000
+        rotation                  0.000       0.000  1.000       1.000
+GLEET   ambient_translation_diag  0.000       0.000  1.000       1.000
+        coordinate_permutation    0.000       0.000  1.000       1.000
+        domain_scaling_down       0.000       0.000  1.000       1.000
+        domain_scaling_up         0.021       0.031  0.758       0.615
+        fitness_rescale           0.000       0.000  1.000       1.000
+        monotone_log              0.124       0.000  0.140       1.000
+        monotone_spline           0.110       0.000  0.156       1.000
+        rotation                  0.000       0.000  1.000       1.000
+GLHF    ambient_translation_diag  2.545       2.545  0.001       0.002
+        coordinate_permutation    0.191       0.165  0.409       0.787
+        domain_scaling_down       0.009       0.000  0.758       1.000
+        domain_scaling_up         0.003       0.000  0.813       1.000
+        fitness_rescale           0.007       0.000  0.758       1.000
+        monotone_log              0.009       0.000  0.844       1.000
+        monotone_spline           0.023       0.000  0.547       1.000
+        rotation                  0.164       0.127  0.547       1.000
+LDE     ambient_translation_diag  0.000       0.000  1.000       1.000
+        coordinate_permutation    0.381       0.230  0.273       0.810
+        domain_scaling_down       0.006       0.000  0.716       1.000
+        domain_scaling_up         0.010       0.000  0.409       1.000
+        fitness_rescale           0.011       0.000  0.106       1.000
+        monotone_log              0.000       0.000  1.000       1.000
+        monotone_spline           0.000       0.000  1.000       1.000
+        rotation                  0.466       0.822  0.086       0.002
+LES     ambient_translation_diag  5.142       5.142  0.001       0.002
+        coordinate_permutation    0.000       0.000  1.000       1.000
+        domain_scaling_down       0.000       0.000  1.000       1.000
+        domain_scaling_up         0.391       0.391  0.001       0.002
+        fitness_rescale           0.000       0.000  1.000       1.000
+        monotone_log              0.000       0.000  1.000       1.000
+        monotone_spline           0.000       0.000  1.000       1.000
+        rotation                  0.075       0.075  0.813       1.000
+NRLPSO  ambient_translation_diag  0.353       0.352  0.369       0.512
+        coordinate_permutation    0.000       0.000  1.000       1.000
+        domain_scaling_down       0.000       0.000  1.000       1.000
+        domain_scaling_up         0.000       0.000  1.000       1.000
+        fitness_rescale           0.000       0.000  1.000       1.000
+        monotone_log              0.022       0.022  1.000       1.000
+        monotone_spline           0.022       0.022  1.000       1.000
+        rotation                  0.000       0.000  1.000       1.000
+QLPSO   ambient_translation_diag  0.000       0.000  1.000       1.000
+        coordinate_permutation    0.000       0.000  1.000       1.000
+        domain_scaling_down       0.000       0.000  1.000       1.000
+        domain_scaling_up         0.000       0.000  1.000       1.000
+        fitness_rescale           0.000       0.000  1.000       1.000
+        monotone_log              0.000       0.000  1.000       1.000
+        monotone_spline           0.000       0.000  1.000       1.000
+        rotation                  0.000       0.000  1.000       1.000
+RLDAS   ambient_translation_diag  3.034       3.102  0.001       0.002
+        coordinate_permutation    0.000       0.138  1.000       1.000
+        domain_scaling_down       0.145       0.287  0.004       0.056
+        domain_scaling_up         1.484       2.093  0.001       0.002
+        fitness_rescale           0.002       0.000  0.864       1.000
+        monotone_log              0.546       0.000  0.001       1.000
+        monotone_spline           0.854       0.000  0.001       1.000
+        rotation                  0.033       0.213  0.898       0.690
+RLDEAFL ambient_translation_diag  0.000       0.036  1.000       0.785
+        coordinate_permutation    0.876       0.320  0.363       1.000
+        domain_scaling_down       0.000       0.000  1.000       1.000
+        domain_scaling_up         0.000       0.000  1.000       1.000
+        fitness_rescale           0.000       0.000  1.000       1.000
+        monotone_log              0.000       0.000  1.000       1.000
+        monotone_spline           0.000       0.001  1.000       1.000
+        rotation                  0.000       0.000  1.000       1.000
+RLEPSO  ambient_translation_diag  0.000       0.000  1.000       1.000
+        coordinate_permutation    0.862       0.444  0.545       1.000
+        domain_scaling_down       0.000       0.000  1.000       1.000
+        domain_scaling_up         0.000       0.034  1.000       1.000
+        fitness_rescale           0.000       0.000  1.000       1.000
+        monotone_log              0.000       0.000  1.000       1.000
+        monotone_spline           0.000       0.002  1.000       1.000
+        rotation                  0.717       0.000  0.613       1.000
+RLHPSDE ambient_translation_diag  0.006       0.000  0.716       1.000
+        coordinate_permutation    0.000       0.192  1.000       0.512
+        domain_scaling_down       5.374       3.161  0.001       0.002
+        domain_scaling_up         0.813       0.712  0.001       0.002
+        fitness_rescale           0.000       0.000  1.000       1.000
+        monotone_log              0.000       0.000  1.000       1.000
+        monotone_spline           0.000       0.000  1.000       1.000
+        rotation                  0.105       0.371  0.758       0.056
+RLPSO   ambient_translation_diag  0.599       0.599  0.004       0.009
+        coordinate_permutation    0.727       0.727  0.086       0.107
+        domain_scaling_down       0.508       0.508  0.086       0.105
+        domain_scaling_up         0.859       0.859  0.001       0.002
+        fitness_rescale           0.000       0.000  1.000       1.000
+        monotone_log              0.000       0.000  1.000       1.000
+        monotone_spline           0.000       0.000  1.000       1.000
+        rotation                  0.437       0.437  0.350       0.512
+RNNOPT  ambient_translation_diag  0.000       0.000  1.000       1.000
+        coordinate_permutation    1.385       1.234  0.001       0.002
+        domain_scaling_down       0.000       0.000  1.000       1.000
+        domain_scaling_up         0.000       0.000  1.000       1.000
+        fitness_rescale           0.017       0.000  0.001       1.000
+        monotone_log              1.109       0.000  0.001       1.000
+        monotone_spline           1.109       0.000  0.001       1.000
+        rotation                  0.908       0.742  0.001       0.002
+SYMBOL  ambient_translation_diag  3.871       3.833  0.001       0.002
+        coordinate_permutation    0.000       0.000  1.000       1.000
+        domain_scaling_down       0.000       0.000  1.000       1.000
+        domain_scaling_up         0.000       0.000  1.000       1.000
+        fitness_rescale           0.000       0.000  1.000       1.000
+        monotone_log              0.003       0.001  0.867       1.000
+        monotone_spline           0.004       0.001  0.845       1.000
+        rotation                  0.000       0.000  1.000       1.000
+
+significant pairs (q <= .05): {'audit': 25, 'audit_layer': 18}
+
+== identity A (points) without / with the layer; d = layer - none, 95% CI
+  agent  A_train_none  A_train_layer  d_train  lo_train  hi_train  n_train crash_train  A_heldout_none  A_heldout_layer  d_heldout  lo_heldout  hi_heldout  n_heldout crash_heldout
+  B2OPT          7.53           7.53    -0.00     -0.04      0.03      280      (0, 0)            5.74             5.75       0.01       -0.01        0.03        640        (0, 0)
+ DEDDQN         10.18          10.50     0.33      0.06      0.68      280      (0, 0)            7.97             8.13       0.16        0.01        0.38        640        (0, 0)
+  DEDQN          4.14           4.14    -0.00     -0.01      0.01      280      (0, 0)            2.79             2.79       0.00       -0.00        0.00        640        (0, 0)
+  GLEET         10.53          10.40    -0.13     -0.34      0.07      280      (0, 0)            7.22             7.14      -0.08       -0.17       -0.00        640        (0, 0)
+   GLHF          4.16           4.16     0.01     -0.01      0.03      280      (0, 0)            2.84             2.84      -0.00       -0.01        0.01        640        (0, 0)
+    LDE          9.94           9.87    -0.07     -0.13     -0.01      280      (0, 0)            6.81             6.80      -0.01       -0.06        0.03        640        (0, 0)
+    LES          6.03           6.03     0.00      0.00      0.00      280      (0, 0)            4.65             4.64      -0.00       -0.01        0.00        640        (0, 0)
+ NRLPSO          7.20           7.20     0.00      0.00      0.00      280      (0, 0)            5.33             5.33       0.00        0.00        0.00        640        (0, 0)
+  QLPSO          7.98           7.97    -0.01     -0.03      0.01      280      (0, 0)            5.75             5.75      -0.00       -0.01        0.00        640        (0, 0)
+  RLDAS          8.32           8.29    -0.03     -0.12      0.03      280      (0, 0)            5.86             5.80      -0.06       -0.11       -0.01        640        (0, 0)
+RLDEAFL          9.11           9.07    -0.04     -0.50      0.43      280      (0, 0)            6.26             6.40       0.14        0.00        0.34        640        (0, 0)
+ RLEPSO         11.63          11.57    -0.06     -0.24      0.11      280      (0, 0)            7.65             7.63      -0.02       -0.09        0.06        640        (0, 0)
+RLHPSDE          6.52           6.48    -0.04     -0.20      0.06      280      (0, 0)            4.66             4.69       0.04        0.01        0.06        640        (0, 0)
+  RLPSO          7.13           7.13     0.00      0.00      0.00      280      (0, 0)            5.41             5.41       0.00        0.00        0.00        640        (0, 0)
+ RNNOPT          4.61           4.61     0.00      0.00      0.01      280      (0, 0)            3.39             3.21      -0.18       -0.54        0.22        640        (0, 0)
+ SYMBOL          6.98           6.97    -0.01     -0.04      0.01      280      (0, 0)            5.10             5.10      -0.00       -0.01        0.00        640        (0, 0)

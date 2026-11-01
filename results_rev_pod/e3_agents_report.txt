@@ -1,0 +1,40 @@
+10-D: 11760 runs, 0 crashed, 12 agents, probes ['ambient_translation_diag', 'coordinate_permutation', 'domain_scaling_up', 'fitness_rescale', 'monotone_log', 'rotation']
+30-D: 11760 runs, 0 crashed, 12 agents, probes ['ambient_translation_diag', 'coordinate_permutation', 'domain_scaling_up', 'fitness_rescale', 'monotone_log', 'rotation']
+
+== V (points), * = BH q <= .05 within dimension
+D                                    10     30
+agent   probe                                 
+DEDDQN  monotone_log              3.87*  1.28*
+GLHF    ambient_translation_diag  2.53*   2.2*
+        rotation                    0.2  0.36*
+LES     ambient_translation_diag  5.13*  4.82*
+        domain_scaling_up          0.28  0.32*
+RLHPSDE domain_scaling_up         0.85*  0.74*
+SYMBOL  ambient_translation_diag   3.9*  3.35*
+
+significant pairs: {10: 5, 30: 7}
+detected at 10-D -> also at 30-D: 5 / 5 ; 30-D only: 2
+per probe (10-D / 30-D significant):
+D                         10  30
+probe                           
+ambient_translation_diag   3   3
+domain_scaling_up          1   2
+monotone_log               1   1
+rotation                   0   1
+Spearman(V_10, V_30) over 72 pairs: rho = 0.408, p = 0.00037
+
+zero-shot performance A (identity), 10-D vs 30-D:
+D           10     30
+agent                
+DEDDQN   0.101  0.043
+DEDQN    0.041  0.023
+GLEET    0.102  0.069
+GLHF     0.042  0.023
+LDE      0.100  0.082
+LES      0.060  0.050
+NRLPSO   0.071  0.045
+QLPSO    0.080  0.045
+RLDEAFL  0.091  0.060
+RLEPSO   0.115  0.088
+RLHPSDE  0.065  0.043
+SYMBOL   0.070  0.035

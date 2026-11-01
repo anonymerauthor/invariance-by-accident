@@ -47,12 +47,15 @@ them from the outside:
 
 | Experiment | Outcome |
 |---|---|
-| Validation on 10 hand-designed optimizers (90 algorithm–probe pairs with known answers) | No false alarm on 76 invariant pairs; the rotation and objective-shape dependences predicted by the update rules are recovered |
-| Audit of the 16 pretrained MetaBox-v2 agents | 16 significant violations out of 208 pairs — all in learned optimizers, none in hand-designed ones; one agent raises an exception on every run when the domain is contracted |
-| Realistic domains | Moving the box from `[-5,5]^D` to `[0,10]^D` already costs learned update rules up to 3.7 points of performance; control agents stay below 0.06 |
-| Held-out functions | Violations on training functions are *not* associated with loss on held-out functions (the association is reversed), so held-out-function tests do not reveal these failures |
-| Frame layer of the harness on the affected agents | All significant search-space violations and all crashes removed; untransformed runs bit-for-bit identical |
-| Objective layer on comparison-based optimizers | Trajectories bit-for-bit identical to the unwrapped optimizer |
+| Validation on 10 hand-designed optimizers | No false alarm on the invariant pairs (0/80 with the distribution-level tests); the rotation and objective-shape dependences predicted by the update rules are recovered, and remain so at 30, 50 and 100 dimensions |
+| Calibration of the tests | Rejection rates 0.048–0.051 under the null; the distribution-level Cramér–von Mises test detects spread-only changes that a mean test misses |
+| Audit of the 16 pretrained MetaBox-v2 agents (20 seeds) | 23 distribution-level violations in 11 agents, none in the hand-designed controls; one agent raises an exception on every run when the domain is contracted |
+| Attribution | No violation requires the learned weights: each is reproduced by the agent's shell, its features or its untrained architecture |
+| Held-out functions | 23 of 25 training violations recur on held-out functions; a presentation change can cost more than the change of function (e.g. LES under translation, 2.98 vs 1.29 points) |
+| Objective layer at test time | Every objective-side violation removed; cost indistinguishable from zero for 14 of 16 agents |
+| Retraining with the objective layer | DEDDQN improves by 2.6 points on training and held-out functions; RLDAS is on par |
+| Finite precision | Forced ties in at most 13% of runs, late in the run; mean performance change at most 0.23 points |
+| Overhead | Frame layer ≤ 2 µs per evaluation; objective layer 20–140 µs per evaluation (Python) |
 
 Performance is the area under the target-hitting ECDF (51 targets from `1e2` to `1e-8`,
 31 budgets up to 20,000 evaluations), expressed in points (×100).
@@ -171,6 +174,38 @@ python experiments/instance_report.py         # verified optima and biases of th
 `make_figures.py` and `analyze_interventions.py` run in the core environment;
 `instance_report.py` builds the MetaBox instances and needs the MetaBox environment.
 
+### Revision experiments
+
+The revision experiments ran on a 32-core Linux machine (Python 3.11, versions pinned in
+`revision/constraints_linux.txt`; `revision/scripts/setup_env.sh` builds the environment).
+The job queues that produced every file are kept in `revision/scripts/queue*.sh`; they write
+to `results_rev/`, stored here as `results_rev_pod/`. Experiments run locally are in
+`results_rev_local/`.
+
+| Script | What it does |
+|---|---|
+| `experiments/exp2_metabox_audit.py --family audit --seeds 20` | E1: audit of the 16 agents with 20 seeds (`--dim`, `--budget`, `--probes` for E3/E4) |
+| `revision/scripts/e2_audit_inference.py`, `e2_calibration.py` | E2: paired and distribution-level tests, multiplicity, calibration by simulation |
+| `experiments/anchor_grid.py` | Anchors at 10, 30, 50, 100 dimensions, with order-embedding instrumentation |
+| `experiments/exp2_metabox_audit.py --family ood_probes` | E8: every probe on the held-out functions |
+| `experiments/e5_knockouts.py` | E5: knock-out attribution (shell, features, untrained architecture) |
+| `experiments/exp2_metabox_audit.py --family audit_layer` (and `ood_layer`) | E6: objective layer at test time on all agents |
+| `experiments/e7_train.py`, `e7_eval.py` | E7: retraining RLDAS and DEDDQN with and without the objective layer |
+| `experiments/e12_rotation_control.py`, `--family rot` | E12: how much of a rotation violation the box explains |
+| `revision/scripts/e10_order_embedding_stress.py` | E10: finite precision of the order embedding |
+| `revision/scripts/e13_overhead.py` | E13: wall-clock overhead of the harness |
+
+Analysis of the revision data (reads only stored results, core environment):
+
+```bash
+python revision/scripts/e8_analysis.py                 # held-out decomposition
+python revision/scripts/law_rev_analysis.py            # violation vs held-out generalization
+python revision/scripts/make_rev_figures.py            # figures of the revised manuscript
+python revision/scripts/make_rev_supplement_tables.py  # every supplementary table
+```
+
+The retrained E7 checkpoints are not included (several GB); `e7_train.py` regenerates them.
+
 ## Repository layout
 
 ```
@@ -183,10 +218,14 @@ invariance-by-accident/
 │   ├── optimizers.py             10 reference optimizers with known invariances
 │   ├── audit.py                  audit driver (common random numbers, checkpointing)
 │   ├── analysis.py               violation score, sign-flip permutation test, FDR
+│   ├── inference.py              distribution-level tests (unpaired V, Cramér–von Mises), BH/BY
 │   ├── harness.py                frame layer, worse-count transform, order embedding
 │   └── external/metabox.py       adapter for the pretrained MetaBox-v2 agents
 ├── experiments/                  one script per experiment + analysis
 ├── results/                      per-run results and derived tables (see results/README.md)
+├── revision/scripts/             revision experiments, analysis, job queues
+├── results_rev_pod/              per-run results of the revision experiments
+├── results_rev_local/            locally run revision experiments (E10, E13)
 ├── tests/                        unit tests of the core guarantees
 ├── requirements.txt
 ├── requirements-metabox.txt
@@ -212,9 +251,11 @@ during development.
 - **Separate logic from arithmetic.** Objective rescaling and shifting are distinct probes,
   and dilations by powers of two (exact in floating point) confirm that residual pathwise
   readings are rounding.
-- **Seed-matched noise correction and a permutation test.** The violation score is the
-  noise-corrected RMS of per-instance shifts; significance uses sign-flip permutations with
-  Benjamini–Hochberg control.
+- **Seed-matched noise correction and exact tests.** The violation score is the
+  noise-corrected RMS of per-instance shifts. A paired sign-flip test is exact under pathwise
+  invariance; label permutations over disjoint seeds, applied to the unpaired score and a
+  Cramér–von Mises statistic, are exact under distributional invariance.
+  Benjamini–Hochberg and Benjamini–Yekutieli control the false discovery rate.
 - **Read, don't assume, the optimum.** Several MetaBox constructors overwrite the shift they
   are given; optima are read back and verified to be global minima.
 - **Count evaluations as they happen.** Some reference implementations spend budgets far
@@ -241,8 +282,9 @@ reproduce the setting the optimizer was trained or tuned in.
 
 ## Data
 
-`results/` contains every per-run result used in the analysis (about 25 MB of CSV), so all
-figures and tables can be regenerated without re-running the experiments. Column
+`results/` contains every per-run result of the first version (about 25 MB of CSV), and
+`results_rev_pod/` and `results_rev_local/` those of the revision (about 70 MB, mostly
+gzipped), so all figures and tables can be regenerated without re-running the experiments. Column
 definitions are in [`results/README.md`](results/README.md). Runs that raised an exception
 are stored with their error message and scored as zero.
 
